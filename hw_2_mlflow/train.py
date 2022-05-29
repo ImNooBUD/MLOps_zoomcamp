@@ -15,6 +15,11 @@ def load_pickle(filename: str):
 
 def run(data_path):
 
+    mlflow.set_tracking_uri('sqlite:///mlflow.db')
+    mlflow.set_experiment('green_taxi_exp')
+
+    mlflow.sklearn.autolog()
+
     X_train, y_train = load_pickle(os.path.join(data_path, "train.pkl"))
     X_valid, y_valid = load_pickle(os.path.join(data_path, "valid.pkl"))
 
@@ -30,7 +35,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data_path",
-        default="./output",
+        default="./../data/hw2_data/output",
         help="the location where the processed NYC taxi trip data was saved."
     )
     args = parser.parse_args()

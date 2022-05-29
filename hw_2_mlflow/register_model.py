@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
 HPO_EXPERIMENT_NAME = "random-forest-hyperopt"
-EXPERIMENT_NAME = "random-forest-best-models"
+EXPERIMENT_NAME = "random-forest-best-models-v2"
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
 mlflow.set_experiment(EXPERIMENT_NAME)
@@ -65,10 +65,23 @@ def run(data_path, log_top):
 
     # select the model with the lowest test RMSE
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-    # best_run = client.search_runs( ...  )[0]
+    final_runs = client.search_runs(
+        experiment_ids=experiment.experiment_id,
+        run_view_type=ViewType.ACTIVE_ONLY,
+        max_results=1,
+        order_by = ["metrics.test_rmse ASC"]
+    )
+
+    best_run_id = None
+    for run in final_runs:
+        best_run_id = run.info.run_id
+        break
+
 
     # register the best model
-    # mlflow.register_model( ... )
+    print(best_run_id)
+    model_uri = f"runs:/{best_run_id}/models"
+    mlflow.register_model(model_uri=model_uri, name="green-taxi-RF-regressor-best-v2")
 
 
 if __name__ == '__main__':
@@ -76,7 +89,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data_path",
-        default="./output",
+        default="./../data/hw2_data/output",
         help="the location where the processed NYC taxi trip data was saved."
     )
     parser.add_argument(
