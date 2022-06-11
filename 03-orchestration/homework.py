@@ -7,11 +7,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 
 from prefect import flow, task, get_run_logger
-from prefect.task_runners import SequentialTaskRunner
+from prefect.orion.schemas.schedules import CronSchedule
+from prefect.deployments import DeploymentSpec
+from prefect.flow_runners import SubprocessFlowRunner
 
 from dateutil.relativedelta import relativedelta
+from datetime import datetime, date
 
-from datetime import datetime, timedelta, date
+
+import pickle
 
 @task(name="read_data")
 def read_data(path):
@@ -86,8 +90,9 @@ def run_model(df, categorical, dv, lr):
     return
 
 @flow(name="main_flow")
-def main(date: date = date(2021,3,15)):
-    train_path, val_path = get_path(date).result()
+def main(run_date: date = date(2021,3,15)):
+    logger = get_run_logger()
+    train_path, val_path = get_path(run_date).result()
     categorical = ['PUlocationID', 'DOlocationID']
 
     df_train = read_data(train_path)
@@ -98,7 +103,25 @@ def main(date: date = date(2021,3,15)):
 
     # train the model
     lr, dv = train_model(df_train_processed, categorical).result()
+    date_str = run_date.strftime('%Y-%m-%d')
+    pickle.dump(lr, open(f'./artifacts/model-{date_str}.bin','wb'))
+    logger.info(f"Save fitted model to file: ./artifacts/model-{date_str}.bin")
+    pickle.dump(dv, open(f'./artifacts/dictvect-{date_str}.bin','wb'))
+    logger.info(f"Save fitted dictvect to file: ./artifacts/dictvect-{date_str}.bin")
+
+    lr = pickle.load(open(f'./artifacts/model-{date_str}.bin','rb'))
+    dv = pickle.load(open(f'./artifacts/dictvect-{date_str}.bin','rb'))
     run_model(df_val_processed, categorical, dv, lr)
+
+
+DeploymentSpec(
+    name = "cron-model-training-deployment",
+    flow = main,
+    flow_runner = SubprocessFlowRunner(),
+    schedule=CronSchedule(cron="0 9 15 * *"),
+    tags=['ml_trip']
+)
+
 
 if __name__ == "__main__":
     main(date(2021,8,15))
